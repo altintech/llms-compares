@@ -10,7 +10,7 @@
 | **GPT-5 Mini** | $0.15 | 9 specific problems | ✅ Catches real risks |
 | **Sonnet 4** | $2.94 | 3 cosmetic issues | ⚠️ **FALSE CONFIDENCE** |
 | **Opus 4** | $6.59 | 12 deep issues | ✅ Thorough but expensive |
-| **Grok 4** | $8.80 | 5 vague observations | ❌ No value |
+| **Grok 4** | $8.80 | 5 vague observations | ❌ Not a lot of value |
 
 ## The Critical Problem
 
@@ -34,30 +34,30 @@
 
 ## Cost Reality Check
 
-### Annual Cost (100 Reviews)
-- **Current approach** (if using Sonnet 4): $294/year, misses critical issues
-- **Recommended approach** (GPT-5 Mini): $15/year, finds real problems
-- **Savings**: $279/year (95% reduction)
+### 1000 Reviews
+- **Current approach** (if using Sonnet 4): $2,940/year, misses critical issues
+- **Recommended approach** (GPT-5 Mini): $150/year, finds real problems
+- **Savings**: 95% lower
 - **Risk reduction**: 3x more issues caught
 
-## CEO Action Items
+## Action Items
 
 ### Immediate
-1. **Switch to GPT-5 Mini** for all code reviews ($0.15 each)
+1. **Switch to GPT-5 Mini** for all code reviews
 2. **Stop using Sonnet 4** - it creates false confidence
 3. **Audit past reviews** - recheck any code approved by Sonnet 4
 
 ### For Critical Systems Only
-- Add Opus 4 ($6.59) as secondary validation for M&A or compliance audits
+- Add Opus 4 as secondary validation for M&A or compliance audits, but increases cost over 40x
 - Still start with GPT-5 Mini first
 
 ## The Bottom Line
 
-**You're not buying a report. You're buying problem detection.**
+**You're buying problem detection.**
 
 - GPT-5 Mini: Finds problems that break systems
 - Sonnet 4: Makes everything look good (dangerous)
-- **Decision**: Use the $0.15 option that actually works
+- **Decision**: Use the cost effective option that actually works
 
 ## ROI Summary
 
@@ -69,4 +69,4 @@
 ---
 
 *Analysis based on actual review outputs for production API codebase*  
-*Cost comparison: GPT-5 Mini ($0.15) vs Grok 4 ($8.80) vs Opus 4 ($6.59) vs Sonnet 4 ($2.94)*
+*Cost comparison: GPT-5 Mini ($0.15) vs Sonnet 4 ($2.94) vs  Opus 4 ($6.59) vs Grok 4 ($8.80)*
