@@ -1,9 +1,12 @@
 # AI Code Review Analysis: Executive Summary
 
-## Key Finding
-**The $0.15 model finds critical issues. The $2.94 model misses them.**
+## The Test Idea
+I've wondered which model is best to review and existing codebase to highlight gaps and help im prove it. I gave the same codenase for an API codebase I'm using and the same prompt for a code review to GPT 5 Mini, Sonnet 4, Opus 4, and Grok 4.
 
-## Quick Comparison
+## Key Finding
+**The lower cost model finds critical issues. The higher cost model misses them.**
+
+## Quick Comparison from each run
 
 | Model | Cost | Critical Issues Found | Business Risk |
 |-------|------|----------------------|---------------|
@@ -14,7 +17,7 @@
 
 ## The Critical Problem
 
-**Sonnet 4 rated the codebase as "EXCELLENT" (95/100) when:**
+**Sonnet 4 DANGEROUSLY rated the codebase as "EXCELLENT" (95/100) when:**
 - No test files actually existed (rated testing 5/5)
 - Security vulnerabilities were present (rated security 5/5)  
 - Race conditions existed in production code (rated 5/5)
@@ -68,5 +71,24 @@
 
 ---
 
-*Analysis based on actual review outputs for production API codebase*  
-*Cost comparison: GPT-5 Mini ($0.15) vs Sonnet 4 ($2.94) vs  Opus 4 ($6.59) vs Grok 4 ($8.80)*
+*Analysis based on actual review outputs for production API codebase*
+
+**Prompt and screenshots:** https://github.com/altintech/llms-compares/blob/main/codebase-review/Prompt%20and%20screenshots.pdf
+
+The markdown files produced from each model:
+
+**GPT5-Mini:** https://github.com/altintech/llms-compares/blob/main/codebase-review/gpt5-mini-review.md
+
+**Sonnet 4**: https://github.com/altintech/llms-compares/blob/main/codebase-review/sonnet-4-review.md
+
+**Opus 4**: https://github.com/altintech/llms-compares/blob/main/codebase-review/opus-4-review.md
+
+**Grok 4**: https://github.com/altintech/llms-compares/blob/main/codebase-review/grok-4-review.md
+
+The costs incurred from each model:
+
+GPT-5 Mini ($0.15) vs Sonnet 4 ($2.94) vs  Opus 4 ($6.59) vs Grok 4 ($8.80)*
+
+
+
+
