@@ -1,61 +1,133 @@
-# API Technical Review — apps/api
+# API Foundation Technical Review — apps/api
+
+Generated on 2025-08-11 by Roo (automated technical review).
 
 ## 1. Executive Summary
-This repository provides a strong production-ready foundation: clear modular structure, telemetry, caching, queueing, global validation, structured logging, idempotency, and audit-ready error handling. It is not yet safe to treat this as “production-ready baseline” without a small set of fixes and documentation/CI additions (see Gaps & Risks). With the fixes below, future work can be limited to the feature folders under [`apps/api/src/features`](apps/api/src/features:1).
+
+- Verdict: The API repository implements a strong, production-oriented foundation — modular NestJS architecture, Zod-validated config, telemetry, structured error handling, JWT + API-key auth, caching, rate‑limit hooks, and a repository DAL. It is close to being a reliable baseline for future feature work, but a few important correctness, consistency, and hardening fixes (mostly small, high‑impact) are needed before declaring it production‑ready without further foundational changes.
 
 ## 2. Scorecard
-Category | Score (0–5) | Key Observations
---- | ---: | ---
-Architecture & Modularity | 4 | Clear separation (see root module imports: [`apps/api/src/app.module.ts`](apps/api/src/app.module.ts:56))
-Persistence & Data Layer | 3 | TypeORM/migrations present (`apps/api/typeorm.config.ts:20`,`apps/api/typeorm.config.ts:34`); migrations not auto-run (`apps/api/typeorm.config.ts:38`)
-Security | 3 | Multi-method auth (JWT/JWKS + API keys + Dual guard) — see [`apps/api/src/lib/auth/auth.module.ts`](apps/api/src/lib/auth/auth.module.ts:64) and [`apps/api/src/lib/auth/authentication/guards/dual-auth.guard.ts`](apps/api/src/lib/auth/authentication/guards/dual-auth.guard.ts:41); but there are dev fallbacks (`apps/api/src/lib/auth/auth.module.ts:57`, `apps/api/src/lib/auth/authentication/guards/api-key.guard.ts:190`)
-Rate Limiting & Abuse Prevention | 3 | Redis-backed sliding-window guard exists (`apps/api/src/common/guards/rate-limit.guard.ts:22`) but Nest throttler TTL misconfigured (`apps/api/src/app.module.ts:92-99`)
-Performance & Scalability | 4 | Redis cache with in-memory fallback (`apps/api/src/lib/cache/cache.module.ts:34`), queue + telemetry integrated (`apps/api/src/lib/telemetry/telemetry.service.ts:44`), DB pooling in DatabaseConfigService (verify)
-Error Handling & Logging | 5 | Global exception filter + structured logging + enhanced validation pipe (`apps/api/src/common/filters/global-exception.filter.ts:88`, `apps/api/src/common/interceptors/logging.interceptor.ts:35`, `apps/api/src/common/pipes/validation.pipe.ts:22`)
-Testing & CI/CD | 3 | Vitest present (`apps/api/package.json:17`) but no visible CI workflows or enforced coverage gates
-Documentation & DevEx | 4 | Swagger setup and env docs; Swagger enabled in non-prod (`apps/api/src/main.ts:204`), env docs present
-Maintainability & Future-Proofing | 4 | Consistent modular pattern, Biome linting in package scripts (`apps/api/package.json:16`), but tighten env fail-fast and remove dev fallbacks
+
+| Category | Score (0–5) | Key Observations |
+|---|---:|---|
+| Architecture & Modularity | 4 | App is modular and feature-driven. See [`apps/api/src/app.module.ts`](apps/api/src/app.module.ts:56). Global interceptors/guards wired: [`apps/api/src/app.module.ts`](apps/api/src/app.module.ts:139). Note: DI anti-pattern in JWT auth: [`apps/api/src/lib/auth/authentication/jwt/jwt-auth.service.ts`](apps/api/src/lib/auth/authentication/jwt/jwt-auth.service.ts:38). |
+| Persistence & Data Layer | 4 | TypeORM with pool and SnakeNamingStrategy: [`apps/api/src/config/database.config.ts`](apps/api/src/config/database.config.ts:26). BaseRepository with transactions and pagination: [`apps/api/src/lib/database/base.repository.ts`](apps/api/src/lib/database/base.repository.ts:55). Migrations in package.json: [`apps/api/package.json`](apps/api/package.json:23). |
+| Security | 4 | Zod env validation: [`apps/api/src/config/env.validation.ts`](apps/api/src/config/env.validation.ts:8). ValidationPipe and sanitization: [`apps/api/src/common/pipes/validation.pipe.ts`](apps/api/src/common/pipes/validation.pipe.ts:22). Global exception filter: [`apps/api/src/common/filters/global-exception.filter.ts`](apps/api/src/common/filters/global-exception.filter.ts:88). JWKS + JWT validator: [`apps/api/src/lib/auth/authentication/jwt/jwks-client.ts`](apps/api/src/lib/auth/authentication/jwt/jwks-client.ts:50). Helmet CSP currently allows unsafe directives: [`apps/api/src/main.ts`](apps/api/src/main.ts:151). |
+| Rate Limiting & Abuse Prevention | 3 | Per-endpoint decorator, guard and interceptor exist: [`apps/api/src/common/decorators/rate-limit.decorator.ts`](apps/api/src/common/decorators/rate-limit.decorator.ts:60), [`apps/api/src/common/guards/rate-limit.guard.ts`](apps/api/src/common/guards/rate-limit.guard.ts:136). Implementation uses read‑modify‑write (cache.get + set) and needs atomic Redis INCR/LUA for safe distributed operation. |
+| Performance & Scalability | 4 | DB pooling and TypeORM config: [`apps/api/src/config/database.config.ts`](apps/api/src/config/database.config.ts:44). Cache service with TTL strategies and cache-aside helpers: [`apps/api/src/lib/cache/cache.service.ts`](apps/api/src/lib/cache/cache.service.ts:98). Telemetry initialized early: [`apps/api/src/main.ts`](apps/api/src/main.ts:83). |
+| Error Handling & Logging | 4 | GlobalExceptionFilter provides consistent error shape: [`apps/api/src/common/filters/global-exception.filter.ts`](apps/api/src/common/filters/global-exception.filter.ts:88). LoggingInterceptor and correlation middleware are present: [`apps/api/src/common/interceptors/logging.interceptor.ts`](apps/api/src/common/interceptors/logging.interceptor.ts:34) and [`apps/api/src/common/middleware/correlation-id.middleware.ts`](apps/api/src/common/middleware/correlation-id.middleware.ts:31). |
+| Testing & CI/CD | 3 | Vitest is configured (scripts): [`apps/api/package.json`](apps/api/package.json:17). Test scaffolding exists under `test/` but there is no evidence of CI gating enforcing coverage in the reviewed snapshot. |
+| Documentation & DevEx | 4 | Swagger/OpenAPI is thorough and wired in dev: [`apps/api/src/config/swagger.config.ts`](apps/api/src/config/swagger.config.ts:7). Zod environment schema documents required envs programmatically: [`apps/api/src/config/env.validation.ts`](apps/api/src/config/env.validation.ts:8). |
+| Maintainability & Future-Proofing | 4 | Feature-based layout and repository pattern enable predictable extension: [`apps/api/src/app.module.ts`](apps/api/src/app.module.ts:56), [`apps/api/src/lib/database/base.repository.ts`](apps/api/src/lib/database/base.repository.ts:55). Address DI anti-pattern and cache-store portability for improvement. |
 
 ## 3. Strengths
-- Modular infrastructure vs features separation: root module imports infrastructure modules and features ([`apps/api/src/app.module.ts`](apps/api/src/app.module.ts:56)).
-- Robust telemetry and metrics: telemetry initialized at bootstrap ([`apps/api/src/main.ts`](apps/api/src/main.ts:83)) and implemented in [`apps/api/src/lib/telemetry/telemetry.service.ts`](apps/api/src/lib/telemetry/telemetry.service.ts:44).
-- Redis-backed caching with in-memory fallback: [`apps/api/src/lib/cache/cache.module.ts`](apps/api/src/lib/cache/cache.module.ts:34).
-- Flexible authentication guards and JWKS-based JWT validation: see [`apps/api/src/lib/auth/auth.module.ts`](apps/api/src/lib/auth/auth.module.ts:64) and [`apps/api/src/lib/auth/authentication/guards/dual-auth.guard.ts`](apps/api/src/lib/auth/authentication/guards/dual-auth.guard.ts:41).
-- Production-minded error handling & logging: [`apps/api/src/common/filters/global-exception.filter.ts`](apps/api/src/common/filters/global-exception.filter.ts:88), [`apps/api/src/common/interceptors/logging.interceptor.ts`](apps/api/src/common/interceptors/logging.interceptor.ts:35), [`apps/api/src/common/pipes/validation.pipe.ts`](apps/api/src/common/pipes/validation.pipe.ts:22).
+
+- Modular infrastructure and clear feature separation: see [`apps/api/src/app.module.ts`](apps/api/src/app.module.ts:56).
+- Strong config validation with Zod: [`apps/api/src/config/env.validation.ts`](apps/api/src/config/env.validation.ts:8).
+- Robust JWT/JWKS pipeline with caching and rotation: [`apps/api/src/lib/auth/authentication/jwt/jwks-client.ts`](apps/api/src/lib/auth/authentication/jwt/jwks-client.ts:50) and [`apps/api/src/lib/auth/authentication/jwt/jwt-validator.ts`](apps/api/src/lib/auth/authentication/jwt/jwt-validator.ts:45).
+- Observability-first approach: OpenTelemetry initialization and TelemetryModule: [`apps/api/src/main.ts`](apps/api/src/main.ts:83) and [`apps/api/src/app.module.ts`](apps/api/src/app.module.ts:116).
+- Centralized error handling and sanitization: ValidationPipe and GlobalExceptionFilter: [`apps/api/src/common/pipes/validation.pipe.ts`](apps/api/src/common/pipes/validation.pipe.ts:22), [`apps/api/src/common/filters/global-exception.filter.ts`](apps/api/src/common/filters/global-exception.filter.ts:88).
 
 ## 4. Gaps & Risks
-- Throttler TTL units bug: [`apps/api/src/app.module.ts`](apps/api/src/app.module.ts:92-99) sets `ttl: 15 * 60 * 1000` (milliseconds) instead of seconds — this invalidates window semantics.
-- Hardcoded/dev fallback secrets: JWT fallback secret present (`apps/api/src/lib/auth/auth.module.ts:57`) and default development API key inserted when none configured (`apps/api/src/lib/auth/authentication/guards/api-key.guard.ts:190`).
-- Migrations not auto-run and limited visible pooling config: `migrationsRun: false` in [`apps/api/typeorm.config.ts`](apps/api/typeorm.config.ts:38); verify `DatabaseConfigService` for pooling/timeouts.
-- Missing CI enforcement: tests and coverage exist in scripts (`apps/api/package.json:17`,`apps/api/package.json:19`) but no workflow present to gate merges.
-- CSP vs Swagger tradeoff: Helmet CSP allows `unsafe-inline`/`unsafe-eval` for Swagger in non-prod (`apps/api/src/main.ts:151`) — must be gated for production.
+
+1. DI anti-pattern in JwtAuthService:
+   - Location: [`apps/api/src/lib/auth/authentication/jwt/jwt-auth.service.ts`](apps/api/src/lib/auth/authentication/jwt/jwt-auth.service.ts:38).
+   - Impact: Harder to mock/replace, invalidates DI lifecycle and testing. Replace manual `new` with DI-provided instances.
+
+2. Non-atomic rate-limiter implementation:
+   - Location: [`apps/api/src/common/guards/rate-limit.guard.ts`](apps/api/src/common/guards/rate-limit.guard.ts:136) and [`apps/api/src/common/interceptors/rate-limit.interceptor.ts`](apps/api/src/common/interceptors/rate-limit.interceptor.ts:137).
+   - Impact: Race conditions in distributed deployments; attackers could bypass limits. Use Redis atomic ops or Lua.
+
+3. CSP/helmet overly permissive for production:
+   - Location: [`apps/api/src/main.ts`](apps/api/src/main.ts:151).
+   - Impact: Increased XSS exposure if Swagger/UI are enabled in production. Make unsafe directives conditional.
+
+4. Cache TTL and store portability issues:
+   - Location: [`apps/api/src/lib/cache/cache.service.ts`](apps/api/src/lib/cache/cache.service.ts:44) and [`apps/api/src/lib/cache/cache.config.service.ts`](apps/api/src/lib/cache/cache.config.service.ts:11).
+   - Impact: TTL semantics differ across stores; `cacheManager.set(..., ttl * 1000)` may be incorrect for the configured store. `clearNamespace` uses `store.keys` which may not be portable for large datasets.
+
+5. Tests/CI enforcement gap:
+   - Location: package scripts: [`apps/api/package.json`](apps/api/package.json:8).
+   - Impact: Risk of regressions without CI coverage & test gating.
 
 ## 5. Recommendations
-Short-term fixes (quick wins)
-- Fix throttler TTL units in [`apps/api/src/app.module.ts`](apps/api/src/app.module.ts:92): use seconds (e.g., `ttl: 15 * 60`) or pass correct unit expected by library.
-- Remove fallback secrets and fail fast:
-  - Require `JWT_SECRET` at startup and remove `'fallback-secret'` in [`apps/api/src/lib/auth/auth.module.ts`](apps/api/src/lib/auth/auth.module.ts:57).
-  - Remove default dev API key (`'dev-key-12345'`) and fail startup if keys are required (`apps/api/src/lib/auth/authentication/guards/api-key.guard.ts:190`).
-- Add Zod-based env validation early in bootstrap (ensure `ConfigModule` validation is strict).
-- Add CI workflow to run `pnpm lint`, `pnpm test`, `pnpm test:cov`, and migration checks before merges (scripts in [`apps/api/package.json`](apps/api/package.json:8-29)).
-- Move Swagger to a docs subdomain or behind a flag and remove `unsafe-*` CSP directives in production (`apps/api/src/main.ts:151`).
+
+Short-term fixes (quick wins — days)
+
+- Use DI for `JwksClient` and `JwtValidator`:
+  - Update [`apps/api/src/lib/auth/authentication/jwt/jwt-auth.service.ts`](apps/api/src/lib/auth/authentication/jwt/jwt-auth.service.ts:38) constructor to accept injected providers; remove `new` calls.
+
+- Make DB SSL handling consistent:
+  - Update to use boolean from ConfigService: change `ssl: this.configService.get<string>('DATABASE_SSL') === 'true'` to `ssl: this.configService.get<boolean>('DATABASE_SSL')` in [`apps/api/src/config/database.config.ts`](apps/api/src/config/database.config.ts:34).
+
+- Harden CSP in bootstrap:
+  - Apply relaxed CSP only when Swagger is enabled (non-production). Update [`apps/api/src/main.ts`](apps/api/src/main.ts:151).
+
+- Fix cache TTL usage:
+  - Use store-agnostic TTL (e.g., pass TTL in seconds using the cache-manager API appropriate for your store) and confirm units. See [`apps/api/src/lib/cache/cache.service.ts`](apps/api/src/lib/cache/cache.service.ts:54).
+
+- Make rate-limiting atomic:
+  - Replace read‑modify‑write with Redis INCR + EXPIRE or a Lua sliding-window script. Update logic in [`apps/api/src/common/guards/rate-limit.guard.ts`](apps/api/src/common/guards/rate-limit.guard.ts:136).
+
+- Add CI workflow:
+  - Ensure `pnpm lint` and `pnpm test:cov` run in CI with coverage gating. Configure GitHub Actions to fail the build on insufficient coverage.
 
 Long-term improvements (strategic)
-- Ensure `DatabaseConfigService` exposes explicit pooling/timeouts and instrument DB connection metrics; document PgBouncer recommendations.
-- Harden dependency/secret pipeline: enable Dependabot/GitHub CodeQL, SAST scans, and secret scanning in CI.
-- Consolidate rate limiting: make Redis sliding-window guard canonical and remove/align Nest `ThrottlerModule` duplication.
-- Add integration tests for auth (JWT+API key), idempotency, rate-limiter behavior, and migration safety in CI.
-- Enforce minimum coverage and merge gating in CI.
 
-## Appendix — Key files referenced
-- Bootstrap / telemetry / helmet / swagger: [`apps/api/src/main.ts`](apps/api/src/main.ts:83), [`apps/api/src/main.ts`](apps/api/src/main.ts:151), [`apps/api/src/main.ts`](apps/api/src/main.ts:204)
-- Root module & throttler: [`apps/api/src/app.module.ts`](apps/api/src/app.module.ts:56), [`apps/api/src/app.module.ts`](apps/api/src/app.module.ts:92)
-- Auth & guards: [`apps/api/src/lib/auth/auth.module.ts`](apps/api/src/lib/auth/auth.module.ts:64), [`apps/api/src/lib/auth/authentication/guards/dual-auth.guard.ts`](apps/api/src/lib/auth/authentication/guards/dual-auth.guard.ts:41), [`apps/api/src/lib/auth/authentication/guards/api-key.guard.ts`](apps/api/src/lib/auth/authentication/guards/api-key.guard.ts:190)
-- DB / migrations: [`apps/api/typeorm.config.ts`](apps/api/typeorm.config.ts:20), [`apps/api/typeorm.config.ts`](apps/api/typeorm.config.ts:34), [`apps/api/typeorm.config.ts`](apps/api/typeorm.config.ts:38)
-- Cache: [`apps/api/src/lib/cache/cache.module.ts`](apps/api/src/lib/cache/cache.module.ts:34)
-- Telemetry service: [`apps/api/src/lib/telemetry/telemetry.service.ts`](apps/api/src/lib/telemetry/telemetry.service.ts:44)
-- Error handling & validation: [`apps/api/src/common/filters/global-exception.filter.ts`](apps/api/src/common/filters/global-exception.filter.ts:88), [`apps/api/src/common/interceptors/logging.interceptor.ts`](apps/api/src/common/interceptors/logging.interceptor.ts:35), [`apps/api/src/common/pipes/validation.pipe.ts`](apps/api/src/common/pipes/validation.pipe.ts:22)
-- Scripts & test tooling: [`apps/api/package.json`](apps/api/package.json:8-29)
+- Integrate `nest-winston` and structured JSON logging:
+  - Wire Winston early in bootstrap and route logs to ELK/Datadog. Winston is already present in deps: [`apps/api/package.json`](apps/api/package.json:78).
+
+- Implement robust distributed rate limiting & abuse detection:
+  - Use Redis atomic algorithms, add Prometheus metrics for rate-limit events, and create alerting rules.
+
+- Align cache invalidation with SCAN / key tagging:
+  - Use SCAN with batching for large keyspaces or maintain sets of keys for namespaces; use pipelines for bulk deletes.
+
+- Expand tests for critical integration paths:
+  - Add integration tests for JWKS/JWT flows (mocked), rate-limiter concurrency, DB migrations, and cache invalidation. Enforce through CI.
+
+- Create ADRs and runbooks:
+  - Document decisions about auth patterns, CSP choices, rate-limiting algorithm, and secret rotation. Add incident runbooks for auth and cache outages.
+
+## 6. Implementation examples (snippets)
+
+- DI fix for JwtAuthService (high-level):
+
+  - Before (problem): see [`apps/api/src/lib/auth/authentication/jwt/jwt-auth.service.ts`](apps/api/src/lib/auth/authentication/jwt/jwt-auth.service.ts:38)
+
+  - After (sketch): inject `JwksClient` and `JwtValidator` via constructor and remove `new` creation.
+
+- Atomic rate-limiter idea (Redis INCR + EXPIRE):
+
+  - Replace the read/modify/set pattern in [`apps/api/src/common/guards/rate-limit.guard.ts`](apps/api/src/common/guards/rate-limit.guard.ts:136) with an atomic Redis operation (INCR + EXPIRE) or a Lua script to implement a sliding window or token bucket.
+
+## 7. Action plan (priority)
+
+1. Fix DI in JwtAuthService, fix DB SSL flag handling, and harden CSP — (1–3 days)  
+2. Replace rate-limiter algorithm with atomic Redis ops and add metrics — (3–5 days)  
+3. Fix cache TTL semantics and invalidation approach — (2–4 days)  
+4. Add CI workflows with coverage gating and integrate Winston — (2–4 days)  
+5. Expand integration tests and create ADRs/runbooks — (ongoing)
 
 ---
-Final verdict: This codebase is a high-quality, near-production foundation — implement the short-term fixes (throttler TTL, remove fallback secrets/dev keys, add env fail-fast, add CI) and then treat apps/api as the reusable baseline for future feature work.
+
+### Evidence index (quick links)
+
+- App bootstrap & Helmet / Swagger / Telemetry: [`apps/api/src/main.ts`](apps/api/src/main.ts:83), [`apps/api/src/main.ts`](apps/api/src/main.ts:151), [`apps/api/src/main.ts`](apps/api/src/main.ts:203)  
+- Root module & modular wiring: [`apps/api/src/app.module.ts`](apps/api/src/app.module.ts:56)  
+- Env validation (Zod): [`apps/api/src/config/env.validation.ts`](apps/api/src/config/env.validation.ts:8)  
+- TypeORM configuration and pool settings: [`apps/api/src/config/database.config.ts`](apps/api/src/config/database.config.ts:26)  
+- Swagger configuration: [`apps/api/src/config/swagger.config.ts`](apps/api/src/config/swagger.config.ts:7)  
+- Global exception filter: [`apps/api/src/common/filters/global-exception.filter.ts`](apps/api/src/common/filters/global-exception.filter.ts:88)  
+- Validation pipe: [`apps/api/src/common/pipes/validation.pipe.ts`](apps/api/src/common/pipes/validation.pipe.ts:22)  
+- Logging & correlation ID middleware: [`apps/api/src/common/interceptors/logging.interceptor.ts`](apps/api/src/common/interceptors/logging.interceptor.ts:34), [`apps/api/src/common/middleware/correlation-id.middleware.ts`](apps/api/src/common/middleware/correlation-id.middleware.ts:31)  
+- Auth wiring and providers: [`apps/api/src/lib/auth/auth.module.ts`](apps/api/src/lib/auth/auth.module.ts:39)  
+- JWKS client & caching: [`apps/api/src/lib/auth/authentication/jwt/jwks-client.ts`](apps/api/src/lib/auth/authentication/jwt/jwks-client.ts:50)  
+- JWT validator: [`apps/api/src/lib/auth/authentication/jwt/jwt-validator.ts`](apps/api/src/lib/auth/authentication/jwt/jwt-validator.ts:45)  
+- Guards (JWT / API key / Dual): [`apps/api/src/lib/auth/authentication/guards/jwt-auth.guard.ts`](apps/api/src/lib/auth/authentication/guards/jwt-auth.guard.ts:48), [`apps/api/src/lib/auth/authentication/guards/api-key.guard.ts`](apps/api/src/lib/auth/authentication/guards/api-key.guard.ts:56), [`apps/api/src/lib/auth/authentication/guards/dual-auth.guard.ts`](apps/api/src/lib/auth/authentication/guards/dual-auth.guard.ts:31)  
+- Rate-limit decorator & guard & interceptor: [`apps/api/src/common/decorators/rate-limit.decorator.ts`](apps/api/src/common/decorators/rate-limit.decorator.ts:60), [`apps/api/src/common/guards/rate-limit.guard.ts`](apps/api/src/common/guards/rate-limit.guard.ts:136), [`apps/api/src/common/interceptors/rate-limit.interceptor.ts`](apps/api/src/common/interceptors/rate-limit.interceptor.ts:137)  
+- Cache service & interceptor: [`apps/api/src/lib/cache/cache.service.ts`](apps/api/src/lib/cache/cache.service.ts:98), [`apps/api/src/lib/cache/cache.interceptor.ts`](apps/api/src/lib/cache/cache.interceptor.ts:76)  
+- Base repository (DAL): [`apps/api/src/lib/database/base.repository.ts`](apps/api/src/lib/database/base.repository.ts:55)  
+- Test runner and package scripts: [`apps/api/package.json`](apps/api/package.json:17)
+
+-- End of report --
