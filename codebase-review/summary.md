@@ -1,7 +1,7 @@
 # AI Code Review Analysis: Executive Summary
 
 ## The Test Idea
-I've wondered which model is best to review and existing codebase to highlight gaps and help im prove it. I gave the same codenase for an API codebase I'm using and the same prompt for a code review to GPT 5 Mini, Sonnet 4, Opus 4, and Grok 4.
+I've wondered which model is best to review an existing codebase to highlight gaps and help improve it. I gave the same codenase for an API codebase I'm using and the same prompt for a code review to GPT 5 Mini, Sonnet 4, Opus 4, and Grok 4.
 
 ## Key Finding
 **The lower cost model finds critical issues. The higher cost model misses them.**
